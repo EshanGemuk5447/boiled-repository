@@ -1,0 +1,84 @@
+#!/bin/bash
+# sudo boil install vendor/package
+# Fully working .boiled installer
+
+BOILED_DIR="/boiled"
+
+if [ "$1" != "install" ] || [ "$#" -ne 2 ]; then
+    echo "Usage: sudo boil install vendor/package"
+    exit 1
+fi
+
+FULL_PKG="$2"
+
+# Split vendor/package
+if [[ "$FULL_PKG" != */* ]]; then
+    echo "E: Package must be in vendor/package format"
+    exit 1
+fi
+
+VENDOR="${FULL_PKG%%/*}"
+PKGNAME="${FULL_PKG#*/}"
+
+TARGET_DIR="$BOILED_DIR/$VENDOR/$PKGNAME"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "E: No such package directory: $TARGET_DIR"
+    exit 1
+fi
+
+# Find .boiled file (versioned okay)
+shopt -s nullglob
+BOILED_FILES=("$TARGET_DIR"/*.boiled)
+shopt -u nullglob
+
+if [ "${#BOILED_FILES[@]}" -eq 0 ]; then
+    echo "E: No .boiled file found in $TARGET_DIR"
+    exit 1
+fi
+
+BOILED_FILE="${BOILED_FILES[0]}"
+BOILED_DIR_NAME="$(dirname "$BOILED_FILE")"
+BASE_NAME="$(basename "$BOILED_FILE" .boiled)"
+SH_FILE="$BOILED_DIR_NAME/$BASE_NAME.sh"
+
+# Rename .sh for sourcing
+mv "$BOILED_FILE" "$SH_FILE"
+trap 'mv "$SH_FILE" "$BOILED_FILE"' EXIT
+
+# Source the .boiled file
+declare -A packages
+source "$SH_FILE"
+
+URL="${packages[$PKGNAME]}"
+
+if [ -z "$URL" ]; then
+    echo "E: Package $PKGNAME not found in .boiled file"
+    exit 1
+fi
+
+# Download the .deb with progress
+TMP_DEB="$(mktemp --suffix=.deb)"
+echo "Downloading $PKGNAME..."
+if command -v wget &>/dev/null; then
+    wget -c --show-progress -O "$TMP_DEB" "$URL" || { echo "Download failed"; exit 1; }
+elif command -v curl &>/dev/null; then
+    curl -L --progress-bar -o "$TMP_DEB" "$URL" || { echo "Download failed"; exit 1;}
+else
+    echo "E: wget or curl required" >&2
+    exit 1
+fi
+
+# Install .deb
+echo "Installing $PKGNAME..."
+dpkg -i "$TMP_DEB"
+
+if [ "$?" -ne 0 ]; then
+    echo "dpkg reported errors. Attempting to fix depedencies..."
+    sudo apt-get install -f -y
+fi
+
+rm -f "$TMP_DEB"
+
+echo "Installed '$PKGNAME' successfully!"
+echo "To uninstall: sudo dpkg -r $PKGNAME"
