@@ -71,4 +71,4 @@ sudo rm -rf ~/boiled-repository
 # Print finish message in red
 echo -e "\e[31mFINISH INSTALLATION\e[0m"
 echo "IF the word '/boiled' showed up after ':' then it works: $(echo $boiled)"
-echo "If no word '/boiled' after ':', pls add line export boiled='/boiled' at the end of your shell (example: ~/.zshrc, ~/.bashrc, etc.)
+echo "If no word '/boiled' after ':', pls add line export boiled='/boiled' at the end of your shell (example: ~/.zshrc, ~/.bashrc, etc.)"
